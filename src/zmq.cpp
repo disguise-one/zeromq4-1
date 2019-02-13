@@ -339,14 +339,20 @@ int zmq_disconnect (void *s_, const char *addr_)
 
 // Sending functions.
 
-static int
+static inline int
 s_sendmsg (zmq::socket_base_t *s_, zmq_msg_t *msg_, int flags_)
 {
-    int sz = (int) zmq_msg_size (msg_);
-    int rc = s_->send ((zmq::msg_t*) msg_, flags_);
+    size_t sz = zmq_msg_size (msg_);
+    int rc = s_->send ((zmq::msg_t *) msg_, flags_);
     if (unlikely (rc < 0))
         return -1;
-    return sz;
+
+    //  This is what I'd like to do, my C++ fu is too weak -- PH 2016/02/09
+    //  int max_msgsz = s_->parent->get (ZMQ_MAX_MSGSZ);
+    size_t max_msgsz = INT_MAX;
+
+    //  Truncate returned size to INT_MAX to avoid overflow to negative values
+    return (int) (sz < max_msgsz? sz: max_msgsz);
 }
 
 /*  To be deprecated once zmq_msg_send() is stable                           */
@@ -362,13 +368,16 @@ int zmq_send (void *s_, const void *buf_, size_t len_, int flags_)
         return -1;
     }
     zmq_msg_t msg;
-    int rc = zmq_msg_init_size (&msg, len_);
-    if (rc != 0)
+    if (zmq_msg_init_size (&msg, len_))
         return -1;
-    memcpy (zmq_msg_data (&msg), buf_, len_);
 
+    //  We explicitly allow a send from NULL, size zero
+    if (len_) {
+        assert (buf_);
+        memcpy (zmq_msg_data (&msg), buf_, len_);
+    }
     zmq::socket_base_t *s = (zmq::socket_base_t *) s_;
-    rc = s_sendmsg (s, &msg, flags_);
+    int rc = s_sendmsg (s, &msg, flags_);
     if (unlikely (rc < 0)) {
         int err = errno;
         int rc2 = zmq_msg_close (&msg);
@@ -376,7 +385,6 @@ int zmq_send (void *s_, const void *buf_, size_t len_, int flags_)
         errno = err;
         return -1;
     }
-
     //  Note the optimisation here. We don't close the msg object as it is
     //  empty anyway. This may change when implementation of zmq_msg_t changes.
     return rc;
@@ -422,6 +430,11 @@ int zmq_sendiov (void *s_, iovec *a_, size_t count_, int flags_)
         errno = ENOTSOCK;
         return -1;
     }
+    if (unlikely (count_ <= 0 || !a_)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     int rc = 0;
     zmq_msg_t msg;
     zmq::socket_base_t *s = (zmq::socket_base_t *) s_;
@@ -456,7 +469,10 @@ s_recvmsg (zmq::socket_base_t *s_, zmq_msg_t *msg_, int flags_)
     int rc = s_->recv ((zmq::msg_t*) msg_, flags_);
     if (unlikely (rc < 0))
         return -1;
-    return (int) zmq_msg_size (msg_);
+
+    //  Truncate returned size to INT_MAX to avoid overflow to negative values
+    size_t sz = zmq_msg_size (msg_);
+    return (int) (sz < INT_MAX? sz: INT_MAX);
 }
 
 /*  To be deprecated once zmq_msg_recv() is stable                           */
@@ -486,11 +502,14 @@ int zmq_recv (void *s_, void *buf_, size_t len_, int flags_)
         return -1;
     }
 
-    //  At the moment an oversized message is silently truncated.
-    //  TODO: Build in a notification mechanism to report the overflows.
+    //  An oversized message is silently truncated.
     size_t to_copy = size_t (nbytes) < len_ ? size_t (nbytes) : len_;
-    memcpy (buf_, zmq_msg_data (&msg), to_copy);
 
+    //  We explicitly allow a null buffer argument if len is zero
+    if (to_copy) {
+        assert (buf_);
+        memcpy (buf_, zmq_msg_data (&msg), to_copy);
+    }
     rc = zmq_msg_close (&msg);
     errno_assert (rc == 0);
 
@@ -519,6 +538,11 @@ int zmq_recviov (void *s_, iovec *a_, size_t *count_, int flags_)
         errno = ENOTSOCK;
         return -1;
     }
+    if (unlikely (!count_ || *count_ <= 0 || !a_)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     zmq::socket_base_t *s = (zmq::socket_base_t *) s_;
 
     size_t count = *count_;
@@ -622,17 +646,17 @@ void *zmq_msg_data (zmq_msg_t *msg_)
     return ((zmq::msg_t*) msg_)->data ();
 }
 
-size_t zmq_msg_size (zmq_msg_t *msg_)
+size_t zmq_msg_size (const zmq_msg_t *msg_)
 {
     return ((zmq::msg_t*) msg_)->size ();
 }
 
-int zmq_msg_more (zmq_msg_t *msg_)
+int zmq_msg_more (const zmq_msg_t *msg_)
 {
     return zmq_msg_get (msg_, ZMQ_MORE);
 }
 
-int zmq_msg_get (zmq_msg_t *msg_, int property_)
+int zmq_msg_get (const zmq_msg_t *msg_, int property_)
 {
     const char* fd_string;
 
@@ -664,7 +688,7 @@ int zmq_msg_set (zmq_msg_t *, int, int)
 
 //  Get message metadata string
 
-const char *zmq_msg_gets (zmq_msg_t *msg_, const char *property_)
+const char *zmq_msg_gets (const zmq_msg_t *msg_, const char *property_)
 {
     zmq::metadata_t *metadata = ((zmq::msg_t*) msg_)->metadata ();
     const char *value = NULL;
@@ -933,10 +957,14 @@ int zmq_poll (zmq_pollitem_t *items_, int nitems_, long timeout_)
 
         //  Wait for events. Ignore interrupts if there's infinite timeout.
         while (true) {
-            memcpy (&inset, &pollset_in, sizeof (fd_set));
-            memcpy (&outset, &pollset_out, sizeof (fd_set));
-            memcpy (&errset, &pollset_err, sizeof (fd_set));
 #if defined ZMQ_HAVE_WINDOWS
+            // On Windows we don't need to copy the whole fd_set.
+            // SOCKETS are continuous from the beginning of fd_array in fd_set.
+            // We just need to copy fd_count elements of fd_array.
+            // We gain huge memcpy() improvement if number of used SOCKETs is much lower than FD_SETSIZE.
+            memcpy (&inset,  &pollset_in , (char *) (pollset_in.fd_array  + pollset_in.fd_count ) - (char *) &pollset_in );
+            memcpy (&outset, &pollset_out, (char *) (pollset_out.fd_array + pollset_out.fd_count) - (char *) &pollset_out);
+            memcpy (&errset, &pollset_err, (char *) (pollset_err.fd_array + pollset_err.fd_count) - (char *) &pollset_err);
             int rc = select (0, &inset, &outset, &errset, ptimeout);
             if (unlikely (rc == SOCKET_ERROR)) {
                 errno = zmq::wsa_error_to_errno (WSAGetLastError ());
@@ -944,6 +972,9 @@ int zmq_poll (zmq_pollitem_t *items_, int nitems_, long timeout_)
                 return -1;
             }
 #else
+            memcpy (&inset,  &pollset_in,  sizeof (fd_set));
+            memcpy (&outset, &pollset_out, sizeof (fd_set));
+            memcpy (&errset, &pollset_err, sizeof (fd_set));
             int rc = select (maxfd + 1, &inset, &outset, &errset, ptimeout);
             if (unlikely (rc == -1)) {
                 errno_assert (errno == EINTR || errno == EBADF);
