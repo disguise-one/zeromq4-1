@@ -609,7 +609,7 @@ int zmq::socket_base_t::connect (const char *addr_)
             check++;
             while (isalnum  (*check)
                 || isxdigit (*check)
-                || *check == '.' || *check == '-' || *check == ':'|| *check == ';'
+                || *check == '.' || *check == '-' || *check == ':' || *check == ';' || *check == '_'
                 || *check == ']')
                 check++;
         }
