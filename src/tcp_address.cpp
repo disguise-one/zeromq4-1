@@ -495,10 +495,10 @@ int zmq::tcp_address_t::to_string (std::string &addr_)
         return -1;
     }
 
-    //  Not using service resolv because of
+    //  Not using service resolving because of
     //  https://github.com/zeromq/libzmq/commit/1824574f9b5a8ce786853320e3ea09fe1f822bc4
     char hbuf [NI_MAXHOST];
-    int rc = getnameinfo (addr (), addrlen (), hbuf, sizeof hbuf, NULL, 0, NI_NUMERICHOST);
+    int rc = getnameinfo (addr (), addrlen (), hbuf, sizeof (hbuf), NULL, 0, NI_NUMERICHOST);
     if (rc != 0) {
         addr_.clear ();
         return rc;
@@ -525,9 +525,9 @@ const sockaddr *zmq::tcp_address_t::addr () const
 socklen_t zmq::tcp_address_t::addrlen () const
 {
     if (address.generic.sa_family == AF_INET6)
-        return (socklen_t) sizeof address.ipv6;
+        return (socklen_t) sizeof (address.ipv6);
     else
-        return (socklen_t) sizeof address.ipv4;
+        return (socklen_t) sizeof (address.ipv4);
 }
 
 const sockaddr *zmq::tcp_address_t::src_addr () const
@@ -538,9 +538,9 @@ const sockaddr *zmq::tcp_address_t::src_addr () const
 socklen_t zmq::tcp_address_t::src_addrlen () const
 {
     if (address.generic.sa_family == AF_INET6)
-        return (socklen_t) sizeof source_address.ipv6;
+        return (socklen_t) sizeof (source_address.ipv6);
     else
-        return (socklen_t) sizeof source_address.ipv4;
+        return (socklen_t) sizeof (source_address.ipv4);
 }
 
 bool zmq::tcp_address_t::has_src_addr () const
@@ -630,7 +630,7 @@ int zmq::tcp_address_mask_t::to_string (std::string &addr_)
     }
 
     char hbuf [NI_MAXHOST];
-    int rc = getnameinfo (addr (), addrlen (), hbuf, sizeof hbuf, NULL, 0, NI_NUMERICHOST);
+    int rc = getnameinfo (addr (), addrlen (), hbuf, sizeof (hbuf), NULL, 0, NI_NUMERICHOST);
     if (rc != 0) {
         addr_.clear ();
         return rc;

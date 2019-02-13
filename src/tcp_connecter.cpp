@@ -65,6 +65,7 @@ zmq::tcp_connecter_t::tcp_connecter_t (class io_thread_t *io_thread_,
     io_object_t (io_thread_),
     addr (addr_),
     s (retired_fd),
+    handle((handle_t)NULL),
     handle_valid (false),
     delayed_start (delayed_start_),
     timer_started (false),
@@ -148,7 +149,7 @@ void zmq::tcp_connecter_t::out_event ()
     //  Shut the connecter down.
     terminate ();
 
-    socket->event_connected (endpoint, fd);
+    socket->event_connected (endpoint, (int) fd);
 }
 
 void zmq::tcp_connecter_t::timer_event (int id_)
@@ -377,6 +378,6 @@ void zmq::tcp_connecter_t::close ()
     const int rc = ::close (s);
     errno_assert (rc == 0);
 #endif
-    socket->event_closed (endpoint, s);
+    socket->event_closed (endpoint, (int) s);
     s = retired_fd;
 }

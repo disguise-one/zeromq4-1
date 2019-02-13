@@ -158,7 +158,7 @@ void zmq::socks_connecter_t::in_event ()
                 //  Attach the engine to the corresponding session object.
                 send_attach (session, engine);
 
-                socket->event_connected (endpoint, s);
+                socket->event_connected (endpoint, (int) s);
 
                 rm_fd (handle);
                 s = -1;
@@ -180,7 +180,7 @@ void zmq::socks_connecter_t::out_event ()
              || status == sending_request);
 
     if (status == waiting_for_proxy_connection) {
-        const int rc = check_proxy_connection ();
+        const int rc = (int) check_proxy_connection ();
         if (rc == -1)
             error ();
         else {
@@ -446,7 +446,7 @@ void zmq::socks_connecter_t::close ()
     const int rc = ::close (s);
     errno_assert (rc == 0);
 #endif
-    socket->event_closed (endpoint, s);
+    socket->event_closed (endpoint, (int) s);
     s = retired_fd;
 }
 

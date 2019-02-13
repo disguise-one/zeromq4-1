@@ -43,7 +43,11 @@ namespace zmq
 
     //  This structure defines the commands that can be sent between threads.
 
+#ifdef _MSC_VER
+    __declspec(align(64)) struct command_t
+#else
     struct command_t
+#endif
     {
         //  Object to process the command.
         zmq::object_t *destination;

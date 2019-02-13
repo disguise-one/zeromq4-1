@@ -64,6 +64,7 @@ zmq::tcp_listener_t::tcp_listener_t (io_thread_t *io_thread_,
     own_t (io_thread_, options_),
     io_object_t (io_thread_),
     s (retired_fd),
+    handle((handle_t)NULL),
     socket (socket_)
 {
 }
@@ -121,7 +122,7 @@ void zmq::tcp_listener_t::in_event ()
     session->inc_seqnum ();
     launch_child (session);
     send_attach (session, engine, false);
-    socket->event_accepted (endpoint, fd);
+    socket->event_accepted (endpoint, (int) fd);
 }
 
 void zmq::tcp_listener_t::close ()
@@ -134,7 +135,7 @@ void zmq::tcp_listener_t::close ()
     int rc = ::close (s);
     errno_assert (rc == 0);
 #endif
-    socket->event_closed (endpoint, s);
+    socket->event_closed (endpoint, (int) s);
     s = retired_fd;
 }
 
@@ -245,7 +246,7 @@ int zmq::tcp_listener_t::set_address (const char *addr_)
         goto error;
 #endif
 
-    socket->event_listening (endpoint, s);
+    socket->event_listening (endpoint, (int) s);
     return 0;
 
 error:

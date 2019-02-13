@@ -65,8 +65,8 @@ void zmq::socks_greeting_encoder_t::encode (const socks_greeting_t &greeting_)
     uint8_t *ptr = buf;
 
     *ptr++ = 0x05;
-    *ptr++ = greeting_.num_methods;
-    for (size_t i = 0; i < greeting_.num_methods; i++)
+    *ptr++ = (uint8_t) greeting_.num_methods;
+    for (uint8_t i = 0; i < greeting_.num_methods; i++)
         *ptr++ = greeting_.methods [i];
 
     bytes_encoded = 2 + greeting_.num_methods;
@@ -173,7 +173,7 @@ void zmq::socks_request_encoder_t::encode (const socks_request_t &req)
     }
     else {
         *ptr++ = 0x03;
-        *ptr++ = req.hostname.size ();
+        *ptr++ = (unsigned char) req.hostname.size ();
         memcpy (ptr, req.hostname.c_str (), req.hostname.size ());
         ptr += req.hostname.size ();
     }
