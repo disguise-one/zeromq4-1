@@ -100,8 +100,12 @@ void zmq::tcp_listener_t::in_event ()
         return;
     }
 
-    tune_tcp_socket (fd);
-    tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+    int rc = tune_tcp_socket (fd);
+    rc |= tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+    if (rc != 0) {
+        socket->event_accept_failed(endpoint, zmq_errno());
+        return;
+    }
 
     // remember our fd for ZMQ_SRCFD in messages
     socket->set_fd(fd);

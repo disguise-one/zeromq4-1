@@ -133,8 +133,14 @@ void zmq::tcp_connecter_t::out_event ()
         return;
     }
 
-    tune_tcp_socket (fd);
-    tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+    int rc = tune_tcp_socket (fd);
+    rc |= tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+
+    if (rc != 0) {
+        close();
+        add_reconnect_timer ();
+        return;
+    }
 
     // remember our fd for ZMQ_SRCFD in messages
     socket->set_fd (fd);
@@ -286,6 +292,18 @@ int zmq::tcp_connecter_t::open ()
 
     // Set a source address for conversations
     if (tcp_addr->has_src_addr ()) {
+        //  Allow reusing of the address, to connect to different servers
+        //  using the same source port on the client.
+        int flag = 1;
+#ifdef ZMQ_HAVE_WINDOWS
+        rc = setsockopt (s, SOL_SOCKET, SO_REUSEADDR, (const char*) &flag,
+                sizeof (int));
+        wsa_assert (rc != SOCKET_ERROR);
+#else
+        rc = setsockopt (s, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof (int));
+        errno_assert (rc == 0);
+#endif
+
         rc = ::bind (s, tcp_addr->src_addr (), tcp_addr->src_addrlen ());
         if (rc == -1)
             return -1;
