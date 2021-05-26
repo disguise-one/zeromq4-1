@@ -133,8 +133,14 @@ void zmq::tcp_connecter_t::out_event ()
         return;
     }
 
-    tune_tcp_socket (fd);
-    tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+    int rc = tune_tcp_socket (fd);
+    rc |= tune_tcp_keepalives (fd, options.tcp_keepalive, options.tcp_keepalive_cnt, options.tcp_keepalive_idle, options.tcp_keepalive_intvl);
+
+    if (rc != 0) {
+        close();
+        add_reconnect_timer ();
+        return;
+    }
 
     // remember our fd for ZMQ_SRCFD in messages
     socket->set_fd (fd);
